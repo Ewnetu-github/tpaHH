@@ -100,73 +100,6 @@ rtpa <- function(n, eta, phi, alpha, F0, g, QF){
   return(r)
 }
 
-#----------------------------------------------------------------------------------------
-#' lognormal (lnorm) hazard function.
-#----------------------------------------------------------------------------------------
-
-hlnorm <- function(t,mu,sigma, log = FALSE){
-  lpdf0 <-  dlnorm(t,mu,sigma, log = T)
-  ls0 <- plnorm(t,mu,sigma, lower.tail = FALSE, log.p = T)
-  val <- lpdf0 - ls0
-  if(log) return(val) else return(exp(val))
-}
-# lognormal (lnorm) cumulative hazard 
-chlnorm <- function(t,mu,sigma){
-  H0 <- -plnorm(t,mu,sigma, lower.tail = FALSE, log.p = TRUE)
-  return(H0)
-}
-#----------------------------------------------------------------------------------------
-#' loglogistic (llogis) hazard function.
-#----------------------------------------------------------------------------------------
-hllogis <- function(t,mu,sigma, log = FALSE){
-  lpdf0 <-  dlogis(log(t),mu,sigma, log = T) - log(t)
-  ls0 <- plogis(log(t),mu,sigma, lower.tail = FALSE, log.p = T)
-  val <- lpdf0 - ls0
-  if(log) return(val) else return(exp(val))
-}
-#loglogistic (llogis) cumulative hazard 
-chllogis <- function(t,mu,sigma){
-  H0 <- -plogis(log(t),mu,sigma, lower.tail = FALSE, log.p = TRUE)
-  return(H0)
-}
-#--------------------------------------------------------------------------------------------------------------------------
-#' Exponentiated Weibull (EW) hazard function.
-#--------------------------------------------------------------------------------------------------------------------------
-#' @param rho     : scale parameter
-#' @param kappa      : shape parameter
-#' @param gamma   : shape parameter
-#' @param t       : positive argument
-#' @param log: log scale (TRUE or FALSE)
-#' @return the value of the EW hazard function
-#' @export
-# Probability density function
-dexpweibull<- function(t, rho, kappa, gamma,log=FALSE){
-  log.pdf <-  log(gamma) + (gamma-1)*pweibull(t,scale=rho,shape=kappa,log=TRUE) + 
-                            dweibull(t,scale=rho,shape=kappa,log=TRUE)
-  ifelse(log, return(log.pdf), return(exp(log.pdf)))
-}
-# Cumulative distribution function
-pexpweibull<- function(t,rho,kappa,gamma,log.p=FALSE){
-  log.cdf <- gamma*pweibull(t,scale=rho,shape=kappa,log.p=TRUE)
-  ifelse(log.p, return(log.cdf), return(exp(log.cdf)))
-}  
-# hazard function for EW
-hexpweibull <- function(t,rho,kappa,gamma,log=FALSE){
-  log.pdf <-  log(gamma) + (gamma-1)*pweibull(t,scale=rho,shape=kappa,log.p=TRUE) + dweibull(t,scale=rho,shape=kappa,log=TRUE)
-  cdf <- exp(gamma*pweibull(t,scale=rho,shape=kappa,log.p=TRUE) )
-  log.h <- log.pdf - log(1-cdf)
-  ifelse(log, return(log.h), return(exp(log.h)))
-}
-# cumulative hazard function for EW 
-chexpweibull <- function(t,rho,kappa,gamma,log.p=FALSE){
-  cdf <- exp(gamma*pweibull(t,scale=rho,shape=kappa,log.p=TRUE) )
-  return(-log(1-cdf))
-}
-# Quantile function for EW
-qexpweibull<- function(p,rho,kappa,gamma){
-  quant <-  qweibull(p^(1/gamma),scale=rho,shape=kappa)
-  return(quant)
-} 
 #-------------------------------------------------------------------------------
 #' Log likelihood and MLE for the parametric hazard based  models.
 #' Baseline hazards: 
@@ -277,30 +210,7 @@ parHH_mle <- function(init, y, delta, x1, x2, dist, psi2.hat=NULL,
       return(val) 
     }
   }
-  # EW  HH Model
-  if(dist == "EW"){
-    nlog.lik <- function(par){
-      if(anyNA(par)) return(Inf)
-      rh0 <- exp(par[1]); kap0 <- exp(par[2]);  gam0 <- exp(par[3])
-      beta1 <- par[4:(3+d1)] # vector of regression parameters 
-      psi.x1 <- as.vector(x1%*%beta1)
-      exp.psi.x1 <- exp(psi.x1)
-      # profiling out  psi(x2) if it is defined nonparametrically 
-      if(is.null(psi2.hat)){
-        beta2 <- par[(4+d1):(3+d1+d2)]
-        psi.x2 <- as.vector(x2%*%beta2)
-      } else{psi.x2 <- psi2.hat }
-      
-      exp.psi.dif <- as.vector(exp(- psi.x1  + psi.x2 ))
-      
-      lhaz0 <- hexpweibull(y*exp.psi.x1, rh0, kap0, gam0, log = TRUE) + psi.x2
-      chaz0 <- chexpweibull(y*exp.psi.x1,rh0, kap0, gam0)*exp.psi.dif
-      lhaz0[is.infinite(lhaz0)] <- NA
-      chaz0[is.infinite(chaz0)] <- NA
-      val <-  - sum(delta*lhaz0, na.rm = T) + sum(chaz0, na.rm = T)#  nloglik
-      return(val) 
-    } 
-  }
+  
   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit),
                                       method = method)
   if(method == "nlminb") OPT <- nlminb(init,nlog.lik,control=list(iter.max=maxit))
@@ -384,28 +294,6 @@ parGH_mle <- function(init, y, delta, x, dist, method = "Nelder-Mead",
       val <-  - sum(delta*lhaz0, na.rm = T) + sum(chaz0, na.rm = T)#  nloglik
       return(val) 
     }
-  }
-  # EW  GH Model
-  if(dist == "EW"){
-    nlog.lik <- function(par){
-      if(anyNA(par)) return(Inf)
-      rh0 <- exp(par[1]); kap0 <- exp(par[2]);  gam0 <- exp(par[3])
-      beta1 <- par[4:(3+d)] # vector of regression parameters 
-      beta2 <- par[(4+d):(3+2*d)]
-      
-      psi.x1 <- as.vector(x%*%beta1)
-      psi.x2 <- as.vector(x%*%beta2)
-      
-      exp.psi.x1 <- exp(psi.x1)
-      exp.psi.dif <- as.vector(exp(-psi.x1  + psi.x2 ))
-      
-      lhaz0 <- hexpweibull(y*exp.psi.x1, rh0, kap0, gam0, log = TRUE) + psi.x2
-      chaz0 <- chexpweibull(y*exp.psi.x1, rh0, kap0, gam0)*exp.psi.dif
-      lhaz0[is.infinite(lhaz0)] <- NA
-      chaz0[is.infinite(chaz0)] <- NA
-      val <-  - sum(delta*lhaz0, na.rm = T) + sum(chaz0, na.rm = T)#  nloglik
-      return(val) 
-    } 
   }
   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit),
                                       method = method)
@@ -491,23 +379,7 @@ parAFT_mle <- function(init, y, delta, x,  dist, method = "Nelder-Mead",
       return(val) 
     }
   }
-  # EW  AFT Model
-  if(dist == "EW"){
-    nlog.lik <- function(par){
-      if(anyNA(par)) return(Inf)
-      rh0 <- exp(par[1]); kap0 <- exp(par[2]);  gam0 <- exp(par[3])
-      beta <- par[4:(3+d)] # vector of regression parameters 
-      psi.x <- as.vector(x%*%beta)
-      exp.psi.x <- exp(psi.x)
-      
-      lhaz0 <- hexpweibull(y*exp.psi.x, rh0, kap0, gam0, log = TRUE) + psi.x
-      chaz0 <- chexpweibull(y*exp.psi.x, rh0, kap0, gam0)
-      lhaz0[is.infinite(lhaz0)] <- NA
-      chaz0[is.infinite(chaz0)] <- NA
-      val <-  -sum(delta*lhaz0, na.rm = T) + sum(chaz0, na.rm = T)#  nloglik
-      return(val) 
-    } 
-  }
+  
   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit), method = method)
   if(method == "nlminb") OPT <- nlminb(init,nlog.lik,control=list(iter.max=maxit))
   OUT <- list(OPT = OPT, nloglik = nlog.lik)
@@ -593,25 +465,6 @@ parPH_mle <- function(init, y, delta, x,  dist, psihat=NULL,
       return(val) 
     }
   }
-  # EW
-  if(dist == "EW"){
-    nlog.lik <- function(par){
-      if(anyNA(par)) return(Inf)
-      rh0 <- exp(par[1]); kap0 <- exp(par[2]);  gam0 <- exp(par[3])
-      if(is.null(psihat)){
-        beta <- par[4:(3+d)] # vector of regression parameters 
-        psi.x <- as.vector(x%*%beta)
-        exp.psi.x <- exp(psi.x)
-      } else{psi.x <- psihat ; exp.psi.x <- exp(psihat)}
-      
-      lhaz0 <- hexpweibull(y, rh0, kap0, gam0, log = TRUE) + psi.x
-      chaz0 <- chexpweibull(y,rh0, kap0, gam0)*exp.psi.x
-      lhaz0[is.infinite(lhaz0)] <- NA
-      chaz0[is.infinite(chaz0)] <- NA
-      val <-  - sum(delta*lhaz0, na.rm = T) + sum(chaz0, na.rm = T)#  nloglik
-      return(val) 
-    } 
-  }
   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit), method = method)
   if(method == "nlminb") OPT <- nlminb(init,nlog.lik,control=list(iter.max=maxit))
   OUT <- list(OPT = OPT, nloglik = nlog.lik)
@@ -691,24 +544,6 @@ parAH_mle <- function(init, y, delta, x, dist, psihat=NULL,
       val <-  - sum(delta*lhaz0, na.rm = T) + sum(chaz0, na.rm = T)#  nloglik
       return(val) 
     }
-  }
-  # EW - PH Model
-  if(dist == "EW"){
-    nlog.lik <- function(par){
-      if(anyNA(par)) return(Inf)
-      rh0 <- exp(par[1]); kap0 <- exp(par[2]);  gam0 <- exp(par[3])
-      beta <- par[4:(3+d)] # vector of regression parameters 
-      psi.x1 <- as.vector(x%*%beta) 
-      psi.x <-  psi.x1 + psi.x2
-      exp.psi.x <- exp(psi.x)
-      
-      lhaz0 <- hexpweibull(y*exp.psi.x, rh0, kap0, gam0, log = TRUE)
-      chaz0 <- chexpweibull(y*exp.psi.x,rh0, kap0, gam0)*exp(-psi.x)
-      lhaz0[is.infinite(lhaz0)] <- NA
-      chaz0[is.infinite(chaz0)] <- NA
-      val <-  - sum(delta*lhaz0, na.rm = T) + sum(chaz0, na.rm = T)#  nloglik
-      return(val) 
-    } 
   }
   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit), method = method)
   if(method == "nlminb") OPT <- nlminb(init,nlog.lik,control=list(iter.max=maxit))
@@ -858,27 +693,7 @@ nonparHH_mle <- function(init=NULL, y, delta, x1, x2, x21.index  = NULL,
       return(val) 
     }
   }
-  # EW - Model
-  if(dist == "EW"){
-    nlog.lik <- function(par){
-      if(anyNA(par)) return(Inf)
-      par0 <- exp(theta.hat)
-      b2 <- par # vector of local regression coefficients  
-      psi.x22 <- as.vector(newx%*%b2)
-      
-      psi.x2 <-  psi.x21 + psi.x22
-      psi.x1 <- as.vector(x1%*%beta1.hat)
-      exp.psi.x1 <- exp(psi.x1)
-      exp.psi.dif <- exp(-psi.x1 + psi.x2)
-      
-      lhaz0 <- hexpweibull(y*exp.psi.x1, par0[1], par0[2], par0[3], log = TRUE) + psi.x2
-      chaz0 <- chexpweibull(y*exp.psi.x1, par0[1], par0[2], par0[3])*exp.psi.dif
-      lhaz0[is.infinite(lhaz0)] <- NA
-      chaz0[is.infinite(chaz0)] <- NA
-      val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
-      return(val) 
-    } 
-  }
+ 
   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit), method = method)
   if(method == "nlminb") OPT <- nlminb(init,nlog.lik,control=list(iter.max=maxit))
   OUT <- OPT$par
@@ -969,23 +784,7 @@ nonparPH_mle <- function(init = NULL, y, delta, x2, x21.index = NULL,
       return(val) 
     }
   }
-  # EW - Model
-  if(dist == "EW"){
-    nlog.lik <- function(par){
-      if(anyNA(par)) return(Inf)
-      par0 <- exp(theta.hat)
-      b2 <- par # vector of local regression coefficients  
-      psi.x22 <- as.vector(newx%*%b2)
-      psi.x2 <- psi.x21 + psi.x22
-      
-      lhaz0 <- hexpweibull(y, par0[1], par0[2], par0[3], log = TRUE) + psi.x2
-      chaz0 <- chexpweibull(y, par0[1], par0[2], par0[3])*exp(psi.x2)
-      lhaz0[is.infinite(lhaz0)] <- NA
-      chaz0[is.infinite(chaz0)] <- NA
-      val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
-      return(val) 
-    } 
-  }
+  
   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit), method = method)
   if(method == "nlminb") OPT <- nlminb(init,nlog.lik,control=list(iter.max=maxit))
   OUT <- OPT$par
@@ -1082,23 +881,7 @@ nonparAH_mle <- function(init = NULL, y, delta, x, x11.index = NULL,
       return(val) 
     }
   }
-  # EW - Model
-  if(dist == "EW"){
-    nlog.lik <- function(par){
-      if(anyNA(par)) return(Inf)
-      par0 <- exp(theta.hat)
-      b1 <- par # vector of local regression coefficients 
-      psi.x12 <- as.vector(newx%*%b1)
-      psi.x <- psi.x11 + psi.x12
-      
-      lhaz0 <- hexpweibull(y*exp(psi.x), par0[1], par0[2], par0[3], log = TRUE) 
-      chaz0 <- chexpweibull(y*exp(psi.x), par0[1], par0[2], par0[3])*exp(-psi.x)
-      lhaz0[is.infinite(lhaz0)] <- NA
-      chaz0[is.infinite(chaz0)] <- NA
-      val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
-      return(val) 
-    } 
-  }
+  
   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit), method = method)
   if(method == "nlminb") OPT <- nlminb(init,nlog.lik,control=list(iter.max=maxit))
   OUT <- OPT$par
@@ -1116,14 +899,7 @@ surv_ase <- function(true_sp, pred_sp){
   d <- (true_sp - pred_sp)^2
   return(ase = mean(d, na.rm=TRUE))
 }
-# absolute error 
 
-surv_abs <- function(true_sp, pred_sp){
-  if(length(true_sp)!=length(pred_sp))
-    stop(" Error: surv_sp and pred_sp must have equal length")
-  d <- abs(true_sp - pred_sp)
-  return(ase = mean(d, na.rm=TRUE))
-}
 #====================================================================
 # Predictions: survival, hazard, cumulative hazard and quantile
 #====================================================================
@@ -1140,8 +916,6 @@ predict_fun <- function(tau=NULL, theta,  time, psihat.1, psihat.2,
   time <- sort(time)
   
   psihat.dif <- psihat.2 - psihat.1
-  
-  if(dist=="EW") par <- exp(theta) else par <- c(exp(theta[1:2]), expit(theta[3]))
   
   if(type=="survival"){
     if(dist =="tpalnorm"){
@@ -1215,6 +989,8 @@ predict_plot <- function(object, time,  xlab="Time", ylab = "Survival probabilit
 # using  trapz function in pracma package 
 
 trap_fun <- function(x0, dpsi.hat){
+   require(pracma)
+   
   if(is.unsorted(x0)){
     ord <- order(x0)
     x0 <- x0[ord]
@@ -1245,45 +1021,12 @@ trap_phihat <- function(x0, dpsi.hat){
 }
 
 #===============================================================
-# functions to compute confidence intervals 
+# functions to compute confidence intervals and standard error
 #===============================================================
-# based on hessian() function from  "numDeriv" library
-
-# nlogLik: - log-likelihood value
-# mle: MLE estimates 
-
-Conf.Int.hess <- function(nlogLik,mle,level=0.95){
-  sd.int <- abs(qnorm(0.5*(1-level)))
-  HESS <- hessian(func = nlogLik,x=mle)
-  Fisher.Info <- solve(HESS)
-  se <- sqrt(diag(Fisher.Info))
-  U <- mle + sd.int*se
-  L <- mle - sd.int*se
-  C.I <- cbind(mle, se, L, U)
-  names.row <- paste0("par", seq_along(1:length(mle)))
-  rownames(C.I)<- names.row
-  colnames(C.I)<- c("Estimates", "Std. Error","Lower","Upper")
-  return(C.I)
-}
-
-#  based on optimHess() function with stats library
-Conf.Int.optim <- function(nlogLik,mle,level=0.95){
-  sd.int <- abs(qnorm(0.5*(1-level)))
-  HESS <- optimHess(par=mle, fn=nlogLik, gr=NULL)
-  Fisher.Info <- solve(HESS)
-  se <- sqrt(diag(Fisher.Info))
-  U <- mle + sd.int*se
-  L <- mle - sd.int*se
-  C.I <- cbind(mle, se, L, U)
-  names.row <- paste0("par", seq_along(1:length(mle)))
-  rownames(C.I)<- names.row
-  colnames(C.I)<- c("Estimates", "Std. Error","Lower","Upper")
-  return(C.I)
-}
-
 #  based on a finite difference numerical approximation for 
 # the hessian matrix using fdHess()  function from nlme library
 Conf.Int.FD <- function(nlogLik,mle,level=0.95,...){
+   require(nlme)
       sd.int <- abs(qnorm(0.5*(1-level)))
       HESS <- fdHess(pars=mle, fun = nlogLik)
       Fisher.Info <- solve(HESS$Hessian)
@@ -1295,68 +1038,5 @@ Conf.Int.FD <- function(nlogLik,mle,level=0.95,...){
       rownames(C.I)<- names.row
       colnames(C.I)<- c("Estimates", "Std. Error","Lower","Upper")
       return(C.I)
-}
-
- # CI.hessian <- Conf.Int.hess(nlogLik= norm.parPH$nloglik, mle=norm.parPH$OPT$par,level=0.95)
- # CI.optim <- Conf.Int.optim(nlogLik= norm.parPH$nloglik, mle=norm.parPH$OPT$par,level=0.95)
-# library(knitr)
-# print(kable(CI.hessian,digits=4))
-
-#---------------------------------------------------------------
-# Confidence intervals for the survival based on Bootstrap
-#---------------------------------------------------------------
-
-#=====================================================
-# Generate initial value for EW [Section 3.1.1]
-# This function is used in fit.model() [see below]
-# theta0: initial values for log(tau) and beta0;
-# c(1,1) is used in fit.model()
-# st = lifetime
-# status = censoring indicator
-# xx = design matrix of the form (1,x_1,...,x_p)
-# reference: Exponentiated Weibull Regression for Time-to-Event Data
-#=====================================================
-init.EW <- function(theta0, st, status, xx) {
-      pllik <- function(theta0, st, status) {
-            y <- log(st)
-            r <- sum(status)
-            tau <- exp(theta0[1])
-            beta0 <- theta0[2]
-            w <- (y - beta0) / tau
-            a <- -expm1(-exp(w))
-            gam <- -r / sum(log(a[status == 1]))
-            lf0 <- status * ((gam - 1) * log(a) + w - exp(w)) + (1 - status) * log1p(-a^gam)
-            lf <- r * log(gam) - r * log(tau) + sum(lf0)
-            return(-as.numeric(lf))
-      }
-      method <- "nlminb"
-      options(warn = -1)
-      fit <- nlminb(start = theta0, objective = pllik, st = st,
-                    status = status)
-      conv <- 0
-      if (fit$message != "relative convergence (4)") {
-            fit <- optim(par = theta0, fn = pllik, st = st,
-                         status = status)# method = "BFGS", 
-            method = "optim-BFGS"
-            conv <- fit$convergence
-      }
-      options(warn = 0)
-      
-      init.logtau <- fit$par[1]
-      init.beta0 <- fit$par[2]
-      w <- (log(st) - init.beta0) / exp(init.logtau)
-      a <- -expm1(-exp(w))
-      init.loggam <- as.numeric(log(-sum(status) / sum(log(a[status == 1]))))
-      if (ncol(xx) > 1) {
-            xx0 <- data.frame(xx[, -1])
-            fit.w <- survreg(Surv(st, status)~., data = xx0, dist = "weibull")
-            init.beta <- fit.w$coef[-1]
-            init <- c(init.logtau, init.loggam, init.beta0, init.beta)
-            names(init) <- c("logtau", "loggam", "intercept", names(xx)[-1])
-      } else{
-            init <- c(init.logtau, init.loggam, init.beta0)
-            names(init) <- c("logtau", "loggam", "intercept")
-      }
-      return(list(init = init, convergence = conv, method = method, message = fit$message))
 }
 
