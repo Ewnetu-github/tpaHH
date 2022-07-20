@@ -1,7 +1,7 @@
 rm(list = ls())
 #-------------------------------------------------------------------------------
 #' Two-piece (TP)  asymmetric lognormal  hazard function
-#' https://github.com/Ewnetu-github/TPAN
+#' https://github.com/Ewnetu-github/parHH
 #-------------------------------------------------------------------------------
 #' @param eta  : location parameter
 #' @param phi  : scale parameter
@@ -102,7 +102,7 @@ rtpa <- function(n, eta, phi, alpha, F0, g, QF){
 
 #-------------------------------------------------------------------------------
 #' Log likelihood and MLE for the parametric hazard based  models.
-#' Baseline hazards: 
+#' Baseline hazards: TPA normal, logistic and Laplace 
 #-------------------------------------------------------------------------------
 #' @param init  : initial points for optimization
 #' @param x1    : design matrix for  time scale  covariates (nxd1)
@@ -387,7 +387,7 @@ parAFT_mle <- function(init, y, delta, x,  dist, method = "Nelder-Mead",
 }
 
 #-------------------------------------------------------------------------------
-# PH hazard model: can be used for parametric, semiparametric  and nonparametric psi2(x) 
+# PH hazard model: can be used for parametric, semiparametric   psi2(x) 
 #-------------------------------------------------------------------------------
 #' @param init  : initial points for optimization
 #' @param x     : design matrix for covariate effects (n x d)
@@ -553,11 +553,7 @@ parAH_mle <- function(init, y, delta, x, dist, psihat=NULL,
 
 
 #--------------------------------------------------------------------------
-# profile local log-likelihood and MLE for the Semiparametric Hazard models .
-# only HH and PH can be accommodate unspecified covariate effects on the relative hazard
-# only AFT and AH can be accommodate unspecified psi1 and psi2 at the same time 
-# HH cannot be suited to include  psi1 and psi2 at the same time : one of the two 
-# functions should be parametric due to identifiable  issue 
+# profile local log-likelihood and MLE for the Semi-parametric Hazard models .
 #--------------------------------------------------------------------------
 #' @param init  : initial points for optimization
 #' @param x1    : design matrix for covariate effects on time scale  (nxp1)
@@ -796,7 +792,7 @@ nonparPH_mle <- function(init = NULL, y, delta, x2, x21.index = NULL,
 #--------------------------------------------------------------------
 # AFT model: to estimate the nonparametric part only 
 #--------------------------------------------------------------------
-nonparAH_mle <- function(init = NULL, y, delta, x, x11.index = NULL, 
+nonparAFT_mle <- function(init = NULL, y, delta, x, x11.index = NULL, 
                          theta.hat, beta1.hat = NULL, dist, 
                          x0, h, ktype = "Epan", method = "Nelder-Mead",
                          maxit = 10000, ...){
@@ -838,8 +834,8 @@ nonparAH_mle <- function(init = NULL, y, delta, x, x11.index = NULL,
       psi.x12 <- as.vector(newx%*%b1)
       psi.x <- psi.x11 + psi.x12
       
-      lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_N, F0_N, glog, log = TRUE) 
-      chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_N, glog,  log = FALSE)*exp(-psi.x)
+      lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_N, F0_N, glog, log = TRUE) + psi.x
+      chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_N, glog,  log = FALSE)
       lhaz0[is.infinite(lhaz0)] <- NA
       chaz0[is.infinite(chaz0)] <- NA
       val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
@@ -855,8 +851,8 @@ nonparAH_mle <- function(init = NULL, y, delta, x, x11.index = NULL,
       psi.x12 <- as.vector(newx%*%b1)
       psi.x <- psi.x11 + psi.x12
       
-      lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_Lo, F0_Lo, glog, log = TRUE) 
-      chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_Lo, glog,  log = FALSE)*exp(-psi.x)
+      lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_Lo, F0_Lo, glog, log = TRUE) + psi.x
+      chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_Lo, glog,  log = FALSE)
       lhaz0[is.infinite(lhaz0)] <- NA
       chaz0[is.infinite(chaz0)] <- NA
       val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
@@ -873,8 +869,8 @@ nonparAH_mle <- function(init = NULL, y, delta, x, x11.index = NULL,
       psi.x12 <- as.vector(newx%*%b1)
       psi.x <- psi.x11 + psi.x12
       
-      lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_La, F0_La, glog, log = TRUE) 
-      chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_La, glog,  log = FALSE)*exp(-psi.x)
+      lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_La, F0_La, glog, log = TRUE) + psi.x
+      chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_La, glog,  log = FALSE)
       lhaz0[is.infinite(lhaz0)] <- NA
       chaz0[is.infinite(chaz0)] <- NA
       val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
@@ -887,6 +883,103 @@ nonparAH_mle <- function(init = NULL, y, delta, x, x11.index = NULL,
   OUT <- OPT$par
   return(OUT)
   
+}
+
+
+#--------------------------------------------------------------------
+# AH model: to estimate the nonparametric part only 
+#--------------------------------------------------------------------
+nonparAH_mle <- function(init = NULL, y, delta, x, x11.index = NULL, 
+                         theta.hat, beta1.hat = NULL, dist, 
+                         x0, h, ktype = "Epan", method = "Nelder-Mead",
+                         maxit = 10000, ...){
+   if (is.na(h) || h <= 0L)
+      stop("invalid 'bandwidth value.' ")
+   if(is.null(colnames(x)))
+      stop("give a column names for the 'covariates'")
+   # Required variables
+   y <- as.vector(y)
+   delta <- as.vector(delta) 
+   n <- length(y)
+   # profiling out the parametric coefficients 
+   if(!is.null(x11.index) | !is.null(beta1.hat)){
+      x11 <- as.matrix(x[, x11.index])
+      d11 <- ncol(x11)
+      x12 <- as.matrix(x[,-c(1:d11)])
+      d12 <- ncol(x12)
+      psi.x11 <- as.vector(x11%*%beta1.hat) 
+   } 
+   else {psi.x11 <- rep(0, n)
+   x12 <- as.matrix(x)
+   d12 <- dim(x12)[2]
+   }
+   # local points 
+   newx0 = x12 - t(matrix(rep(x0,d12*n),d12,n))
+   ker.h <- as.vector(apply(newx0/h, MARGIN = 2, FUN = ker, ktype = ktype)/h)
+   newx <- cbind(1, newx0, newx0^2)# second order derivative 
+   
+   if(is.null(init)){
+      fit.poly <- lm(y[delta==1]~poly(newx0[delta==1], degree = 2))
+      init <- as.numeric(fit.poly$coefficients)
+   }
+   # TPA lognormal  PH model  
+   if(dist == "tpalnorm"){
+      nlog.lik <- function(par){
+         if(anyNA(par)) return(Inf)
+         eta0 <- exp(theta.hat[1]); phi0 <- exp(theta.hat[2]);  alpha0 <- expit(theta.hat[3]) # par. for baseline distribution
+         b1 <- par # vector of local regression coefficients 
+         psi.x12 <- as.vector(newx%*%b1)
+         psi.x <- psi.x11 + psi.x12
+         
+         lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_N, F0_N, glog, log = TRUE) 
+         chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_N, glog,  log = FALSE)*exp(-psi.x)
+         lhaz0[is.infinite(lhaz0)] <- NA
+         chaz0[is.infinite(chaz0)] <- NA
+         val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
+         return(val) 
+      }
+   }
+   # TPA loglogistic PH model  
+   if(dist == "tpallogis"){
+      nlog.lik <- function(par){
+         if(anyNA(par)) return(Inf)
+         eta0 <- exp(theta.hat[1]); phi0 <- exp(theta.hat[2]);  alpha0 <- expit(theta.hat[3]) # par. for baseline distribution
+         b1 <- par # vector of local regression coefficients 
+         psi.x12 <- as.vector(newx%*%b1)
+         psi.x <- psi.x11 + psi.x12
+         
+         lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_Lo, F0_Lo, glog, log = TRUE) 
+         chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_Lo, glog,  log = FALSE)*exp(-psi.x)
+         lhaz0[is.infinite(lhaz0)] <- NA
+         chaz0[is.infinite(chaz0)] <- NA
+         val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
+         return(val) 
+      }
+   }
+   
+   # TPA logLaplace  model 
+   if(dist == "tpalLap"){
+      nlog.lik <- function(par){
+         if(anyNA(par)) return(Inf)
+         eta0 <- exp(theta.hat[1]); phi0 <- exp(theta.hat[2]);  alpha0 <- expit(theta.hat[3]) # par. for baseline distribution
+         b1 <- par # vector of local regression coefficients 
+         psi.x12 <- as.vector(newx%*%b1)
+         psi.x <- psi.x11 + psi.x12
+         
+         lhaz0 <- htpa(y*exp(psi.x), eta0, phi0, alpha0, f0_La, F0_La, glog, log = TRUE) 
+         chaz0 <- Htpa(y*exp(psi.x), eta0, phi0, alpha0, F0_La, glog,  log = FALSE)*exp(-psi.x)
+         lhaz0[is.infinite(lhaz0)] <- NA
+         chaz0[is.infinite(chaz0)] <- NA
+         val <-  - sum(delta*lhaz0*ker.h, na.rm = T) + sum(chaz0*ker.h, na.rm = T)#  nloglik
+         return(val) 
+      }
+   }
+   
+   if(method != "nlminb") OPT <- optim(init,nlog.lik,control=list(maxit=maxit), method = method)
+   if(method == "nlminb") OPT <- nlminb(init,nlog.lik,control=list(iter.max=maxit))
+   OUT <- OPT$par
+   return(OUT)
+   
 }
 #===================================================================
 # distance measures 
@@ -983,8 +1076,6 @@ predict_plot <- function(object, time,  xlab="Time", ylab = "Survival probabilit
 #====================================================================
 #' x0: vector of grid values 
 #' dpsi.hat: estimate of the derivative of psi
-
-
 
 # using  trapz function in pracma package 
 
